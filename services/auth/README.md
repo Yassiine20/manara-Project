@@ -28,17 +28,18 @@ Requires `Authorization: Bearer <token>` and returns the current user.
 
 Requires a bearer token, deletes its Redis session, and returns `204 No Content`.
 
-### Health endpoints
+### Health endpoint
 
 - `GET /health` is the ECS container liveness endpoint.
-- `GET /ready` checks PostgreSQL and Redis connectivity.
 
 ## Run
 
 Copy `.env.example` to `.env`, provide local PostgreSQL and Redis instances, then run:
 
 ```bash
+cp .env.example .env
 npm install
+set -a; source .env; set +a
 npm run db:deploy
 npm run dev
 ```

@@ -31,4 +31,4 @@ set -a; source .env; set +a
 npm run dev
 ```
 
-Set `NOTIFICATIONS_SERVICE_URL` and `INTERNAL_API_KEY` together to enable the optional order-created notification call. Leave both empty until Notifications is available.
+Set `NOTIFICATIONS_SERVICE_URL=http://localhost:3003` and use the same `INTERNAL_API_KEY` as Notifications. Orders appends `/internal/notifications` to this base URL. Leave both values empty to disable notification calls.
