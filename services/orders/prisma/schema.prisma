@@ -1,0 +1,43 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["orders"]
+}
+
+enum OrderStatus {
+  CREATED
+
+  @@schema("orders")
+}
+
+model Order {
+  id         String      @id @default(uuid()) @db.Uuid
+  userId     String      @map("user_id") @db.Uuid
+  status     OrderStatus @default(CREATED)
+  totalCents Int         @map("total_cents")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  items      OrderItem[]
+
+  @@index([userId, createdAt])
+  @@map("orders")
+  @@schema("orders")
+}
+
+model OrderItem {
+  id             String @id @default(uuid()) @db.Uuid
+  orderId        String @map("order_id") @db.Uuid
+  productId      String @map("product_id") @db.VarChar(100)
+  quantity       Int
+  unitPriceCents Int    @map("unit_price_cents")
+  order          Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_items")
+  @@schema("orders")
+}
