@@ -5,6 +5,8 @@
 **/.env
 **/.env.*
 !**/.env.example
+/local-keys/
+*.pem
 
 # Build and test output
 **/dist/

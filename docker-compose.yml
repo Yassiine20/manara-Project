@@ -1,0 +1,94 @@
+
+services:
+  auth:
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile
+    env_file:
+      - ./services/auth/.env
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      DATABASE_URL: "postgresql://auth:${POSTGRES_PASSWORD:?Required}@postgres:5432/manara?schema=auth"
+      REDIS_URL: "redis://redis:6379"
+      SESSION_TTL_SECONDS: "3600"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  orders:
+    build:
+      context: ./services/orders
+      dockerfile: Dockerfile
+    env_file:
+      - ./services/orders/.env
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: "3002"
+      DATABASE_URL: "postgresql://auth:${POSTGRES_PASSWORD:?Required}@postgres:5432/manara?schema=orders"
+      REDIS_URL: "redis://redis:6379"
+      NOTIFICATIONS_SERVICE_URL: "http://notifications:3003"
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      notifications:
+        condition: service_started
+    restart: unless-stopped
+
+  notifications:
+    build:
+      context: ./services/notifications
+      dockerfile: Dockerfile
+    env_file:
+      - ./services/notifications/.env
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: "3003"
+      DATABASE_URL: "postgresql://auth:${POSTGRES_PASSWORD:?Required}@postgres:5432/manara?schema=notifications"
+      REDIS_URL: "redis://redis:6379"
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Required}
+      POSTGRES_DB: manara
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth -d manara"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

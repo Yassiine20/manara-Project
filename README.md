@@ -11,7 +11,7 @@ services/
   notifications/    TypeScript/Express notifications service
 ```
 
-Each service contains its API contract and development commands in its own README. ECS should inject database URLs, Redis URLs, JWT secrets, and internal API keys at runtime.
+Each service contains its API contract and development commands in its own README. ECS should inject database URLs, Redis URLs, Auth's private signing key, and the internal API key at runtime.
 
 ## Local architecture
 
@@ -21,7 +21,7 @@ Each service contains its API contract and development commands in its own READM
 | Orders | 3002 | `orders` | Authenticated order creation and retrieval |
 | Notifications | 3003 | `notifications` | Persisted order notifications |
 
-All services use the `manara` PostgreSQL database. They share Redis and the same `JWT_SECRET`. Orders calls Notifications using `NOTIFICATIONS_SERVICE_URL` and a separate shared `INTERNAL_API_KEY`.
+All services use the `manara` PostgreSQL database and share Redis. Auth signs RS256 user tokens with `JWT_PRIVATE_KEY`; all three services verify them with `JWT_PUBLIC_KEY` and check the Redis session. Orders calls Notifications using `NOTIFICATIONS_SERVICE_URL` and a separate `INTERNAL_API_KEY` shared only by those two services.
 
 ## Local dependencies
 
@@ -46,25 +46,39 @@ docker start manara-postgres manara-redis
 
 ## Environment
 
-Generate two different secrets:
+Generate a 2048-bit RSA key pair and a separate internal API key:
 
 ```bash
-openssl rand -hex 32  # JWT_SECRET: use in all three services
+mkdir -p local-keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out local-keys/jwt-private.pem
+openssl pkey -in local-keys/jwt-private.pem -pubout -out local-keys/jwt-public.pem
 openssl rand -hex 32  # INTERNAL_API_KEY: use in Orders and Notifications
 ```
 
-Copy each service's `.env.example` to `.env`. Use these database URLs:
+Copy each service's `.env.example` to `.env`. Paste the full contents of `jwt-private.pem` into Auth's `JWT_PRIVATE_KEY` and the full contents of `jwt-public.pem` into each service's `JWT_PUBLIC_KEY`. Keep the PEM content between single quotes, including its BEGIN/END lines. The services also accept `\n` in place of PEM line breaks. The `local-keys` folder and `.env` files are ignored by Git.
+
+Use these database URLs:
 
 ```env
 # Auth
 DATABASE_URL=postgresql://auth:auth@localhost:5432/manara?schema=auth
+JWT_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----
+...paste private key lines...
+-----END PRIVATE KEY-----'
+JWT_PUBLIC_KEY='-----BEGIN PUBLIC KEY-----
+...paste public key lines...
+-----END PUBLIC KEY-----'
 
 # Orders
 DATABASE_URL=postgresql://auth:auth@localhost:5432/manara?schema=orders
+JWT_PUBLIC_KEY='same public key as Auth'
 NOTIFICATIONS_SERVICE_URL=http://localhost:3003
+INTERNAL_API_KEY=same-generated-internal-key-as-Notifications
 
 # Notifications
 DATABASE_URL=postgresql://auth:auth@localhost:5432/manara?schema=notifications
+JWT_PUBLIC_KEY='same public key as Auth'
+INTERNAL_API_KEY=same-generated-internal-key-as-Orders
 ```
 
 Never put `/api/notifications` in `NOTIFICATIONS_SERVICE_URL`; Orders appends `/internal/notifications` itself.
@@ -91,6 +105,8 @@ npm start
 ```
 
 Start Notifications, then Orders, then Auth. Health checks are available at `/health` on ports 3001, 3002, and 3003.
+
+After switching from the old `JWT_SECRET` setup, log in again: existing HS256 tokens are no longer valid. Restart all three services with the matching public key before issuing new tokens.
 
 ## Test the flow
 
@@ -122,8 +138,8 @@ curl http://localhost:3003/api/notifications \
 
 ## AWS configuration
 
-- Inject database credentials, `JWT_SECRET`, and `INTERNAL_API_KEY` from Secrets Manager.
-- Use the same Redis endpoint and JWT secret for all services.
+- Inject `JWT_PRIVATE_KEY` only into Auth and `INTERNAL_API_KEY` only into Orders and Notifications from Secrets Manager. Configure the same `JWT_PUBLIC_KEY` in all three services.
+- Use the same Redis endpoint in all services.
 - Set Orders' `NOTIFICATIONS_SERVICE_URL` to the Notifications Cloud Map DNS base URL.
 - Route `/api/auth/*`, `/api/orders/*`, and `/api/notifications/*` through the ALB.
 - Do not expose `/internal/*` through an ALB listener rule.

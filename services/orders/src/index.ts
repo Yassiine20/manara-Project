@@ -1,3 +1,4 @@
+import { createPublicKey } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import express, { type NextFunction, type Request, type Response } from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
@@ -7,15 +8,20 @@ import { validate as isUuid } from "uuid";
 const PORT = Number(process.env.PORT ?? 3002);
 const DATABASE_URL = process.env.DATABASE_URL;
 const REDIS_URL = process.env.REDIS_URL;
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, "\n");
 const NOTIFICATIONS_URL = process.env.NOTIFICATIONS_SERVICE_URL;
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
 
-if (!DATABASE_URL || !REDIS_URL || !JWT_SECRET || JWT_SECRET.length < 32) {
-  throw new Error("DATABASE_URL, REDIS_URL, and the same 32+ character JWT_SECRET as Auth are required");
+if (!DATABASE_URL || !REDIS_URL || !JWT_PUBLIC_KEY) {
+  throw new Error("DATABASE_URL, REDIS_URL, and Auth's JWT_PUBLIC_KEY are required");
 }
 if (Boolean(NOTIFICATIONS_URL) !== Boolean(INTERNAL_API_KEY)) {
   throw new Error("NOTIFICATIONS_SERVICE_URL and INTERNAL_API_KEY must be configured together");
+}
+
+const verificationKey = createPublicKey(JWT_PUBLIC_KEY);
+if (verificationKey.asymmetricKeyType !== "rsa") {
+  throw new Error("JWT_PUBLIC_KEY must be an RSA public key");
 }
 
 const prisma = new PrismaClient();
@@ -32,7 +38,8 @@ async function authenticate(request: Request, response: AuthResponse, next: Next
     const [type, token] = request.header("authorization")?.split(" ") ?? [];
     if (type !== "Bearer" || !token) throw new Error();
 
-    const payload = jwt.verify(token, JWT_SECRET!, {
+    const payload = jwt.verify(token, verificationKey, {
+      algorithms: ["RS256"],
       issuer: "manara-auth",
       audience: "manara-api"
     }) as JwtPayload;

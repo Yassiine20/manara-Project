@@ -46,4 +46,4 @@ npm run dev
 
 ## ECS runtime configuration
 
-Inject `DATABASE_URL`, `REDIS_URL`, and `JWT_SECRET` from Secrets Manager. Never place production secrets in the image.
+Inject `DATABASE_URL`, `REDIS_URL`, and `JWT_PRIVATE_KEY` from Secrets Manager. Configure `JWT_PUBLIC_KEY` from the matching RSA key pair. Never place the private key in an image.

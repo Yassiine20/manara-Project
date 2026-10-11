@@ -24,9 +24,9 @@ The internal endpoint accepts:
 ```bash
 cp .env.example .env
 npm install
-npm run db:deploy
 set -a; source .env; set +a
+npm run db:deploy
 npm run dev
 ```
 
-Use the same `JWT_SECRET` and Redis instance as Auth. Use a separate `INTERNAL_API_KEY`, then configure that same key and `NOTIFICATIONS_SERVICE_URL=http://localhost:3003` in Orders.
+Use Auth's `JWT_PUBLIC_KEY` and the same Redis instance. Use a separate `INTERNAL_API_KEY`, then configure that same key and `NOTIFICATIONS_SERVICE_URL=http://localhost:3003` in Orders.

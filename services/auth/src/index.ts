@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createPrivateKey, createPublicKey, randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import express, { type NextFunction, type Request, type Response } from "express";
@@ -8,11 +8,23 @@ import { createClient } from "redis";
 const PORT = Number(process.env.PORT ?? 3001);
 const DATABASE_URL = process.env.DATABASE_URL;
 const REDIS_URL = process.env.REDIS_URL;
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_PRIVATE_KEY = process.env.JWT_PRIVATE_KEY?.replace(/\\n/g, "\n");
+const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, "\n");
 const SESSION_TTL = Number(process.env.SESSION_TTL_SECONDS ?? 3600);
 
-if (!DATABASE_URL || !REDIS_URL || !JWT_SECRET || JWT_SECRET.length < 32) {
-  throw new Error("DATABASE_URL, REDIS_URL, and a 32+ character JWT_SECRET are required");
+if (!DATABASE_URL || !REDIS_URL || !JWT_PRIVATE_KEY || !JWT_PUBLIC_KEY) {
+  throw new Error("DATABASE_URL, REDIS_URL, JWT_PRIVATE_KEY, and JWT_PUBLIC_KEY are required");
+}
+
+const signingKey = createPrivateKey(JWT_PRIVATE_KEY);
+const verificationKey = createPublicKey(JWT_PUBLIC_KEY);
+if (
+  signingKey.asymmetricKeyType !== "rsa" ||
+  verificationKey.asymmetricKeyType !== "rsa" ||
+  createPublicKey(signingKey).export({ type: "spki", format: "pem" }) !==
+    verificationKey.export({ type: "spki", format: "pem" })
+) {
+  throw new Error("JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be a matching RSA key pair");
 }
 
 const prisma = new PrismaClient();
@@ -32,7 +44,8 @@ const publicUser = (user: { id: string; email: string; name: string | null; crea
 async function createSession(userId: string) {
   const sessionId = randomUUID();
   await redis.setEx(sessionKey(sessionId), SESSION_TTL, userId);
-  const token = jwt.sign({ sid: sessionId }, JWT_SECRET!, {
+  const token = jwt.sign({ sid: sessionId }, signingKey, {
+    algorithm: "RS256",
     subject: userId,
     issuer: "manara-auth",
     audience: "manara-api",
@@ -45,7 +58,8 @@ async function authenticate(request: Request, response: AuthResponse, next: Next
   try {
     const [type, token] = request.header("authorization")?.split(" ") ?? [];
     if (type !== "Bearer" || !token) throw new Error();
-    const payload = jwt.verify(token, JWT_SECRET!, {
+    const payload = jwt.verify(token, verificationKey, {
+      algorithms: ["RS256"],
       issuer: "manara-auth",
       audience: "manara-api"
     }) as JwtPayload;

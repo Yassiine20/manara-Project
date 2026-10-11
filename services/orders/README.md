@@ -19,15 +19,15 @@ Example order body:
 }
 ```
 
-All order endpoints require `Authorization: Bearer <auth-token>`. Orders must use the same `JWT_SECRET` and Redis instance as Auth.
+All order endpoints require `Authorization: Bearer <auth-token>`. Orders must use Auth's `JWT_PUBLIC_KEY` and the same Redis instance. Orders never needs the private key.
 
 ## Run
 
 ```bash
 cp .env.example .env
 npm install
-npm run db:deploy
 set -a; source .env; set +a
+npm run db:deploy
 npm run dev
 ```
 
