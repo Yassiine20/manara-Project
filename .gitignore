@@ -18,3 +18,14 @@
 .idea/
 .vscode/
 *.swp
+
+#IaC files
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+!terraform.tfvars.example
+terraform.tfstate
+terraform.tfstate.backup
+tfplan
